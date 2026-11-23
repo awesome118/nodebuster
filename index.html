@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, user-scalable=no">
   <title>Nodebuster</title>
   <link rel="icon" type="image/png" href="Nodebuster.icon.png">
-  <script src="./coi-serviceworker.js"></script>
+  <script src="./coi-serviceworker-v2.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -178,11 +178,29 @@
         initializing = false;
       }
 
-      const missing = Engine.getMissingFeatures();
-      if (missing.length) {
-        showError("Error\nThe following features required to run Godot projects on the Web are missing:\n" + missing.join("\n"));
-      } else {
-        setMode("indeterminate");
+      setMode("indeterminate");
+      (async function initializeGame() {
+        const isolation = await (
+          window.coiServiceWorker?.settled ??
+          Promise.resolve({ status: "failed", reason: "service-worker-script-not-loaded" })
+        );
+
+        if (isolation.status !== "isolated") {
+          const missing = Engine.getMissingFeatures();
+          const reason = isolation.reason || isolation.status || "unknown";
+          showError(
+            "Error\nCross-origin isolation could not be enabled: " + reason +
+            (missing.length ? "\n" + missing.join("\n") : "")
+          );
+          return;
+        }
+
+        const missing = Engine.getMissingFeatures();
+        if (missing.length) {
+          showError("Error\nThe following features required to run Godot projects on the Web are missing:\n" + missing.join("\n"));
+          return;
+        }
+
         engine.startGame({
           onProgress(current, total) {
             if (total > 0) {
@@ -199,7 +217,7 @@
           setMode("hidden");
           initializing = false;
         }, showError);
-      }
+      })();
     })();
   </script>
 </body>
