@@ -55,22 +55,27 @@ def validate_pack(data: bytes) -> None:
         )
 
     directory_offset = 96
+    if directory_offset + 4 > len(data):
+        fail(f"{PACK_PATH.name} does not contain a complete directory header")
+
     file_count = read_u32(data, directory_offset)
-    directory_bytes = len(data) - directory_offset - 4
-    # A v2 directory entry needs at least a four-byte path length, a minimally
-    # padded path, two uint64 values, a 16-byte MD5, and a uint32 flags field.
-    minimum_entry_bytes = 40
-    maximum_entries = min(1_000_000, directory_bytes // minimum_entry_bytes)
-    if file_count == 0 or file_count > maximum_entries:
-        fail(
-            f"{PACK_PATH.name} declares {file_count:,} directory entries, but its "
-            f"{directory_bytes:,}-byte directory can hold at most {maximum_entries:,}. "
-            "The PCK is incomplete or corrupted."
-        )
+    if file_count == 0 or file_count > 1_000_000:
+        fail(f"{PACK_PATH.name} has an implausible directory-entry count: {file_count:,}")
+
+    if not (flags & 0x1):  # Unencrypted directory.
+        directory_bytes = len(data) - directory_offset - 4
+        minimum_entry_bytes = 44
+        maximum_entries = directory_bytes // minimum_entry_bytes
+        if file_count > maximum_entries:
+            fail(
+                f"{PACK_PATH.name} declares {file_count:,} directory entries, but its "
+                f"{directory_bytes:,}-byte directory can hold at most {maximum_entries:,}. "
+                "The PCK is incomplete or corrupted."
+            )
 
 
 def validate_size_declaration(html: str, filename: str, actual_size: int) -> None:
-    match = re.search(rf'["\\']{re.escape(filename)}["\\']\\s*:\\s*(\\d+)', html)
+    match = re.search(rf'"{re.escape(filename)}"\s*:\s*(\d+)', html)
     if not match:
         fail(f"index.html does not declare the download size for {filename}")
     declared_size = int(match.group(1))
@@ -99,7 +104,7 @@ def main() -> None:
     html = HTML_PATH.read_text(encoding="utf-8")
 
     validate_pack(pack)
-    if not wasm.startswith(b"\\x00asm"):
+    if not wasm.startswith(b"\x00asm"):
         fail(f"{WASM_PATH.name} does not have the WebAssembly binary signature")
 
     validate_size_declaration(html, PACK_PATH.name, len(pack))
