@@ -25,6 +25,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Validate Godot web export
+        run: python3 scripts/validate_export.py
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
